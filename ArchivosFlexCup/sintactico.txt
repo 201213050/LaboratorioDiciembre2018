@@ -1,0 +1,312 @@
+package Analizador.lenguaje;
+import java_cup.runtime.Symbol;
+import java.util.ArrayList;
+import AST.error;
+import AST.lexema;
+import AST.Nodo;
+import java.util.LinkedList;
+import java.util.List;
+
+parser code
+{:
+	public String cadena="";    	
+	public ArrayList<error> listaErrores = new ArrayList();
+	public static Nodo raiz ;
+
+	public String ConvertirObjectToString(Object Obj)
+	 {
+		String Str="";
+		if(Obj!=null)
+		{
+			Str = Obj.toString();
+		}
+		return Str;
+	}
+
+	public String quitarComillas(String cadena)
+	{
+		if(cadena!=null)
+		{
+			if(!cadena.equals(""))
+			{
+				String inicio = cadena.substring(0, 1);
+				if(inicio.equals("\"") || inicio.equals("\'"))
+				{
+					return cadena.substring(1, cadena.length()-1);
+				}
+				return cadena.trim();            
+			}
+			return cadena.trim();
+		}
+		return cadena.trim();
+	}	
+
+
+@Override
+    public void syntax_error(Symbol cur_token) 
+	{        
+        List<Integer> listaIdTokens = expected_token_ids();
+        LinkedList<String> listaNombres = new LinkedList<String>();
+        for (Integer expected : listaIdTokens) 
+        {			
+            listaNombres.add(symbl_name_from_id(expected));
+        }
+		listaErrores.add(new error("Sintactico",cur_token.right+1,cur_token.left+1,String.valueOf(cur_token.value),"Se esperaba :"+listaNombres.toString()));
+    }
+
+	public void addError(Symbol s)
+	{
+		listaErrores.add(new error("Sintactico",s.left,s.right+1,ConvertirObjectToString(s.value)));
+	}	
+:}
+
+
+terminal String var,coma, puntocoma, asignacion, mas, menos, multi, div, potencia,
+			modulo, incremento, decremento, igual, diferente, menorIgual, mayorIgual, menorque,
+			mayorque, or, and, no, si, sino, sinosi, corcheteA, corcheteC, mientras, para, imprimir,
+			correrdasm, nativaPunto, nativaCuadrado, nativaOvalo, nativaCadena, nativaLinea, parA, parC, identificador,
+			entero, decimal, cadena, caracter, falso, verdadero, smash;
+
+
+non terminal Nodo S,ARITMETICA,RELACIONAL,OPREL,EXPAND,EXPOR,EXPNOT,EXPRESION,ASIGNACION, DECLARACION,
+			INC, DEC, ARREGLO, SI, LISTSINOS, SINOS, SINO,LTSINO,MIENTRAS,
+			PARA,UNARIO, LISTGENERALES, GENERALES,LISTCICLO,
+			ACCESOS,FOVALO , FPUNTO, FCUADRADO, FLINEA, FCADENA,
+			LISTDECL, PRIMITIVA, FIN,RUMDASM, LISTARCHIVOS;
+
+/* Precedences */
+precedence left mas, menos;
+precedence left modulo;
+precedence left div, multi;
+precedence right potencia;
+precedence right decremento, incremento;
+
+
+
+start with S;
+
+//Nodo(String valor, String tipo, int linea, int columna)
+S ::= LISTGENERALES:instrucciones{: sintactico.raiz = instrucciones; RESULT = instrucciones;:};
+
+LISTGENERALES::= LISTGENERALES:lista GENERALES:inst{:lista.add(inst); RESULT = lista;:}
+			| GENERALES:inst{:Nodo nodo = new Nodo("instrucciones"); nodo.add(inst); RESULT = nodo;:};
+
+GENERALES::= DECLARACION:declaracion FIN {:RESULT =declaracion;:}
+			| ASIGNACION:asig FIN{:RESULT = asig;:}
+			| INC:inc FIN{:RESULT = inc;:}
+			| DEC:dec FIN{:RESULT = dec;:}				
+			| RUMDASM:correr FIN{:RESULT = correr;:}	
+			| SI:cond{: RESULT = cond;:}
+			| PARA:para {:RESULT = para;:}
+			| imprimir parA EXPRESION:expresion parC FIN{:Nodo nodo = new Nodo("imprimir"); nodo.add(expresion); RESULT = nodo;:}
+			| MIENTRAS:cond{: RESULT = cond;:};
+			
+			
+LISTCICLO::= LISTCICLO:lista GENERALES:inst{:lista.add(inst); RESULT = lista;:}
+			|LISTCICLO:lista smash:b puntocoma{:lista.add(new Nodo("smash",b,bleft,bright)); RESULT = lista;:}
+			|GENERALES:gen{:Nodo list = new Nodo("instrucciones"); list.add(gen); RESULT = list;:}
+			|smash:b puntocoma {:Nodo list = new Nodo("instrucciones"); list.add(new Nodo("smash",b,bleft,bright)); RESULT = list; :};
+
+
+RUMDASM::= correrdasm:correr parA LISTARCHIVOS:lista parC{:Nodo nodo = new Nodo("rundasm","rundasm",correrleft,correrright); nodo.add(lista); RESULT = nodo;:};
+
+LISTARCHIVOS::= 
+			LISTARCHIVOS:lista coma caracter:cad{: lista.add(new Nodo(cad,"direccion",cadleft,cadright)); RESULT = lista;:}
+			|LISTARCHIVOS:lista coma cadena:cad{: lista.add(new Nodo(cad,"direccion",cadleft,cadright)); RESULT = lista;:}
+			| caracter:cad{: Nodo nodo = new Nodo("archivos"); nodo.add(new Nodo(cad,"direccion",cadleft,cadright)); RESULT = nodo;:}
+			| cadena:cad{: Nodo nodo = new Nodo("archivos"); nodo.add(new Nodo(cad,"direccion",cadleft,cadright)); RESULT = nodo;:};
+
+
+
+
+FIN::= puntocoma 
+	| error;
+
+
+
+
+
+UNARIO::= INC:un{:RESULT = un;:}
+		| DEC:un{:RESULT = un;:};
+
+PARA::= para parA ASIGNACION:asignacion puntocoma EXPRESION:expresion puntocoma UNARIO:operacion parC corcheteA LISTCICLO:instrucciones corcheteC	
+		{:
+			Nodo nodo = new Nodo("para");
+			nodo.add(asignacion);
+			nodo.add(expresion);
+			nodo.add(operacion);
+			nodo.add(instrucciones);
+			RESULT = nodo;
+		:}
+ 		|para parA DECLARACION:declaracion puntocoma EXPRESION:expresion puntocoma UNARIO:operacion parC corcheteA LISTCICLO:instrucciones corcheteC	
+		{:
+			Nodo nodo = new Nodo("para");
+			nodo.add(declaracion);
+			nodo.add(expresion);
+			nodo.add(operacion);
+			nodo.add(instrucciones);
+			RESULT = nodo;
+		:};		
+
+
+INC::= identificador:id incremento:inc
+			{:	
+				Nodo nodo = new Nodo("incremento"); 
+				nodo.add(new Nodo(id,"identificador",idleft, idright)); 
+				nodo.add(new Nodo(inc,inc,incleft,incright)); 
+				RESULT = nodo;
+			:};			
+DEC::= identificador:id decremento:inc
+			{:
+				Nodo nodo = new Nodo("decremento"); 
+				nodo.add(new Nodo(id,"identificador",idleft, idright)); 
+				nodo.add(new Nodo(inc,inc,incleft,incright)); 					
+				RESULT = nodo;
+			:};
+
+
+
+
+MIENTRAS::= mientras parA EXPRESION:exp parC corcheteA LISTCICLO:lista corcheteC
+		{:
+			Nodo nodo = new Nodo("mientras");
+			nodo.add(exp);
+			nodo.add(lista);
+			RESULT = nodo;
+		:} ;
+
+
+SI::= si parA EXPRESION:condicion parC corcheteA  LISTCICLO:instrucciones corcheteC
+		{:
+			Nodo nodo = new Nodo("si");
+			nodo.add(condicion);
+			nodo.add(instrucciones);
+			RESULT = nodo;
+		:}
+		|si parA EXPRESION:condicion parC corcheteA  LISTCICLO:instrucciones corcheteC LTSINO:lista
+		{:
+			Nodo nodo = new Nodo("si");
+			nodo.add(condicion);
+			nodo.add(instrucciones);
+			nodo.add(lista);
+			RESULT = nodo;
+		:};
+
+
+LTSINO::= LISTSINOS:lista SINO:sino{:lista.add(sino); RESULT = lista;:}
+		| LISTSINOS:lista{:RESULT = lista;:}
+		| SINO:si{:RESULT = si;:};
+
+
+LISTSINOS::= LISTSINOS:lista SINOS:sino
+			{:
+				lista.add(sino);
+				RESULT = lista;
+			:}
+		|SINOS:sin{:RESULT =sin; :};	
+
+SINOS::= sino  corcheteA  LISTCICLO:instrucciones corcheteC
+		{:
+			Nodo nodo = new Nodo("else");
+			//nodo.add(condicion);
+			nodo.add(instrucciones);
+			RESULT = nodo;
+		:};
+
+SINOS::=	sinosi parA EXPRESION:condicion parC corcheteA  LISTCICLO:instrucciones corcheteC
+		{:
+			Nodo nodo = new Nodo("elif");			
+			nodo.add(condicion);
+			nodo.add(instrucciones);
+			RESULT = nodo;
+		:};	
+
+
+DECLARACION::= var LISTDECL:lista {: Nodo nodo = new Nodo("declaracion"); nodo.add(lista); RESULT = nodo;:};
+
+LISTDECL::= LISTDECL:lista coma identificador:id asignacion EXPRESION:exp{:Nodo aux = new Nodo(id,"variable",idleft,idright); aux.add(exp); lista.add(aux); RESULT = lista;:}
+		| LISTDECL:lista coma identificador:id {: lista.add(new Nodo(id,"variable",idleft,idright)); RESULT = lista;:}
+		| identificador:id asignacion EXPRESION:exp{: Nodo nodo = new Nodo("lista"); Nodo aux =new Nodo(id,"variable",idleft,idright); aux.add(exp); nodo.add(aux);RESULT = nodo;:}
+		| identificador:id {: Nodo nodo = new Nodo("lista"); nodo.add(new Nodo(id,"variable",idleft,idright)); RESULT = nodo;:};
+
+ASIGNACION::= identificador:id  asignacion EXPRESION:exp
+			{:
+				Nodo nodo = new Nodo("asignacion");
+				//nodo.add(new Nodo(id,"variable",idleft,idright));
+				Nodo tmp = new Nodo(id,"variable",idleft,idright);
+				tmp.add(exp);
+				nodo.add(tmp);
+				RESULT = nodo;
+			:};
+
+EXPRESION::= EXPOR:e{:RESULT = e;:};			
+
+EXPOR::= EXPOR:e1 or:op EXPAND:e2
+			{: 
+				Nodo nodo = new Nodo(op,"logica",opleft,opright); 
+				nodo.add(e1); nodo.add(e2); RESULT=nodo;
+			:}		
+		| EXPAND:e{:RESULT = e;:};
+
+EXPAND::= EXPAND:e1 and:op EXPNOT:e2 
+			{: 
+				Nodo nodo = new Nodo(op,"logica",opleft,opright); 
+				nodo.add(e1); nodo.add(e2); RESULT=nodo;
+			:}		
+		| EXPNOT:e {:RESULT=e;:};
+
+EXPNOT ::=   //no:neg  RELACIONAL:r  {:Nodo neg = new Nodo("no",n,nleft,nright); n.add(r); RESULT = neg;:}
+			 	RELACIONAL:r {:RESULT=r;:};		
+
+RELACIONAL::= ARITMETICA:r1 OPREL:RELACIONAL ARITMETICA:r2 {:Nodo nodo = RELACIONAL; nodo.add(r1); nodo.add(r2); RESULT = nodo;:}
+			 | ARITMETICA:r {:RESULT = r;:};			
+
+OPREL::= igual:op{:Nodo nodo = new Nodo(op,"relacional",opleft,opright); RESULT = nodo;:}
+	|diferente:op{:Nodo nodo = new Nodo(op,"relacional",opleft,opright); RESULT = nodo;:}
+	|menorque:op{:Nodo nodo = new Nodo(op,"relacional",opleft,opright); RESULT = nodo;:}
+	|mayorque:op{:Nodo nodo = new Nodo(op,"relacional",opleft,opright); RESULT = nodo;:}
+	|menorIgual:op{:Nodo nodo = new Nodo(op,"relacional",opleft,opright); RESULT = nodo;:}
+	|mayorIgual:op{:Nodo nodo = new Nodo(op,"relacional",opleft,opright); RESULT = nodo;:};
+	//| error {: System.out.println(error);:}
+
+ARITMETICA      ::=
+			  menos:n ARITMETICA:e{: Nodo nodo = new Nodo("menos",n,nleft,nright); nodo.add(e); RESULT = nodo; :}
+			| ARITMETICA:e1 mas:op ARITMETICA:e2 {: Nodo nodo= new Nodo(op,"suma",opleft,opright); nodo.add(e1); nodo.add(e2); RESULT = nodo;:}
+			| ARITMETICA:e1 menos:op ARITMETICA:e2 {: Nodo nodo= new Nodo(op,"resta",opleft,opright); nodo.add(e1); nodo.add(e2); RESULT = nodo;:}
+			| ARITMETICA:e1 multi:op ARITMETICA:e2 {: Nodo nodo= new Nodo(op,"multi",opleft,opright); nodo.add(e1); nodo.add(e2); RESULT = nodo;:}
+			| ARITMETICA:e1 div:op ARITMETICA:e2 {: Nodo nodo= new Nodo(op.toString(),"div",opleft,opright); nodo.add(e1); nodo.add(e2); RESULT = nodo;:}
+			| ARITMETICA:e1 potencia:op ARITMETICA:e2 {: Nodo nodo= new Nodo(op,"pow",opleft,opright); nodo.add(e1); nodo.add(e2); RESULT = nodo;:}
+			| ARITMETICA:e1 modulo:op ARITMETICA:e2 {: Nodo nodo= new Nodo(op,"mod",opleft,opright); nodo.add(e1); nodo.add(e2); RESULT = nodo;:}											
+			| PRIMITIVA:v {:RESULT = v;:}																			
+			| ARITMETICA:p incremento {: Nodo nodo = new Nodo("incremento","incremento",pleft,pright); nodo.add(p); RESULT = nodo;:}
+			| ARITMETICA:p  decremento {: Nodo nodo = new Nodo("decremento","decremento",pleft,pright); nodo.add(p); RESULT = nodo;:}						
+			| parA EXPRESION:v parC {:RESULT = v;:}	
+			| no:n ARITMETICA:e{: Nodo nodo = new Nodo("no",n,nleft,nright); nodo.add(e); RESULT = nodo; :}			
+			| error;
+
+/*NEG::= NEG:neg no:n {: Nodo aux = neg; while(aux.getHijos().size()>0){aux = aux.getHijos().get(0);}; aux.add(new Nodo("no",n,nleft,nright)); RESULT = neg;:}
+		| no:n{: RESULT = new Nodo("no",n,nleft,nright);:};*/
+
+PRIMITIVA::= //no:n PRIMITIVA:p {:Nodo neg = new Nodo("no",n,nleft,nright); neg.add(p); RESULT = neg;:}|
+			 identificador:id ARREGLO:arreglo{:Nodo nodo = new Nodo("acceso"); nodo.add(new Nodo(id,"variable",idleft,idright)); nodo.add(arreglo); RESULT = nodo;:}			
+			| entero:n {: Nodo nodo= new Nodo(n,"numerico",nleft,nright); RESULT = nodo;:}
+			| decimal:n {: Nodo nodo= new Nodo(n,"numerico",nleft,nright); RESULT = nodo;:}
+			| caracter:n {: Nodo nodo= new Nodo(quitarComillas(n),"caracter",nleft,nright); RESULT = nodo;:}
+			| cadena:n {: Nodo nodo= new Nodo(quitarComillas(n),"cadena",nleft,nright); RESULT = nodo;:}
+			| falso:n {: Nodo nodo= new Nodo(n,"booleano",nleft,nright); RESULT = nodo;:}
+			| verdadero:n {: Nodo nodo= new Nodo(n,"booleano",nleft,nright); RESULT = nodo;:}
+			| identificador:n incremento:p 
+				{: 
+					Nodo raiz = new Nodo("incremento", "incremento",pleft,pright); 
+					Nodo nodo= new Nodo(n,"variable",nleft,nright);  
+					raiz.add(nodo); 
+					RESULT =raiz;
+				:}
+			| identificador:n decremento:p 
+				{: 
+					Nodo raiz = new Nodo("decremento", "decremento",pleft,pright); 
+					Nodo nodo= new Nodo(n,"variable",nleft,nright);  
+					raiz.add(nodo); 
+					RESULT =raiz;
+				:}		
+			| identificador:n {: Nodo nodo= new Nodo(n,"variable",nleft,nright); RESULT = nodo;:};

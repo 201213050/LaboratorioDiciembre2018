@@ -1,0 +1,6 @@
+var edad = 10*2;
+var nombre = "Erick Roberto";
+var carnet = 201213050;
+var saldo = 10.00 + 20 - 20 * 200 -(5+2);
+var activo = false + false + true ;
+

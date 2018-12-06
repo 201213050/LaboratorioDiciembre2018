@@ -1,0 +1,10 @@
+
+int edad = 10*2;
+int carnet = 10;
+int saldo = carnet + edad;
+print (saldo - ( carnet +edad));
+print(edad);
+print(carnet);
+print(saldo);
+
+
